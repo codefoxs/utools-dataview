@@ -1,7 +1,7 @@
 {
   "pluginName": "DataView",
-  "description": "P0 feasibility test - DuckDB in uTools Electron",
-  "author": "p0",
+  "description": "通过超级面板快速预览 csv/tsv/parquet/xlsx/dta/sav/sas7bdat/por/xpt/duckdb 数据文件，基于 DuckDB",
+  "author": "codefoxs",
   "version": "1.0.3",
   "main": "index.html",
   "preload": "preload.js",
