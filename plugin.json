@@ -8,6 +8,11 @@
   "logo": "logo.png",
   "features": [
     {
+      "code": "dataview",
+      "explain": "打开 DataView 数据预览",
+      "cmds": ["dataview", "数据预览"]
+    },
+    {
       "code": "dataview-open",
       "explain": "预览数据文件",
       "cmds": [
