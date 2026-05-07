@@ -1,0 +1,592 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>DataView</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --surface-2: #f4f2ed;
+    --border: #e6e2db;
+    --border-strong: #d6d0c4;
+    --fg: #2b2926;
+    --fg-muted: #6b6660;
+    --fg-subtle: #948e85;
+    --accent: #c96442;
+    --accent-soft: #e8d4cb;
+    --danger: #b34844;
+    --warn: #b78103;
+    --ok: #4a7c3e;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.04);
+    --radius: 8px;
+    --radius-sm: 5px;
+    --table-fs: 13px;
+  }
+  [data-theme="dark"] {
+    --bg: #1f1e1c;
+    --surface: #28272480;
+    --surface-2: #2e2c28;
+    --border: #3a3733;
+    --border-strong: #4a463f;
+    --fg: #ecebe7;
+    --fg-muted: #b0aaa0;
+    --fg-subtle: #807a70;
+    --accent: #d97757;
+    --accent-soft: #4a2c22;
+    --shadow: 0 1px 2px rgba(0,0,0,.2), 0 4px 12px rgba(0,0,0,.15);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 14px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ----- header ----- */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex: none;
+  }
+  header .brand { font-weight: 600; letter-spacing: .2px; }
+  header .file {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; color: var(--fg-muted);
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl;
+  }
+  header .status { font-size: 12px; color: var(--fg-subtle); }
+  header .ok { color: var(--ok); }
+  header .err { color: var(--danger); }
+
+  .icon-btn {
+    background: transparent; border: 1px solid transparent;
+    color: var(--fg-muted); cursor: pointer;
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm); font-size: 14px;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+  .icon-btn.active { color: var(--accent); border-color: var(--border); background: var(--surface-2); }
+
+  /* ----- sql bar ----- */
+  .sql-bar {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    transition: max-height .2s ease;
+    max-height: 0;
+    flex: none;
+  }
+  .sql-bar.open { max-height: 220px; }
+  .sql-bar-inner { padding: 10px 16px; position: relative; }
+  .sql-bar textarea {
+    width: 100%; min-height: 80px; max-height: 180px; resize: vertical;
+    font: 12.5px/1.55 ui-monospace, "SF Mono", Consolas, monospace;
+    color: var(--fg); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 8px 80px 8px 10px; outline: none;
+  }
+  .sql-bar textarea:focus { border-color: var(--accent); }
+  .sql-bar .run {
+    position: absolute; top: 18px; right: 24px;
+    padding: 5px 14px; font-size: 12px; font-weight: 500;
+    background: var(--accent); color: white; border: none;
+    border-radius: var(--radius-sm); cursor: pointer;
+    transition: opacity .12s;
+  }
+  .sql-bar .run:hover { opacity: .9; }
+  .sql-bar .hint { font-size: 11px; color: var(--fg-subtle); margin-top: 6px; }
+  .sql-bar .hint code { background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
+
+  /* ----- main ----- */
+  main { flex: 1; overflow: auto; padding: 12px 16px 0; min-height: 0; display: flex; flex-direction: column; }
+
+  .meta { font-size: 12px; color: var(--fg-muted); margin: 0 0 8px; }
+  .toolbar {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin: 0 0 10px;
+  }
+  .tab-btn {
+    font: inherit; font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--fg-muted);
+    border-radius: var(--radius-sm); cursor: pointer;
+    transition: all .12s;
+  }
+  .tab-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+  .tab-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ----- table ----- */
+  .table-wrap {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    min-height: 200px;
+  }
+  table { border-collapse: separate; border-spacing: 0; font-size: var(--table-fs); width: 100%; }
+  th, td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    max-width: 360px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: left;
+  }
+  thead th {
+    background: var(--surface-2);
+    position: sticky; top: 0; z-index: 2;
+    font-weight: 600; color: var(--fg);
+    border-bottom: 1px solid var(--border-strong);
+    font-size: calc(var(--table-fs) - 1px);
+  }
+  thead th .col-type {
+    display: block; font-weight: 400; font-size: 10.5px;
+    color: var(--fg-subtle); margin-top: 1px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  tbody tr:hover td { background: var(--surface-2); }
+  td.null { color: var(--fg-subtle); font-style: italic; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ----- pager ----- */
+  .pager {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 8px; padding: 10px 0 12px;
+    color: var(--fg-muted); font-size: 12px;
+    flex: none;
+  }
+  .pager .info { margin-right: auto; }
+  .pager button {
+    font: inherit; font-size: 12px;
+    padding: 4px 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--fg); border-radius: var(--radius-sm);
+    cursor: pointer; transition: all .12s;
+  }
+  .pager button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager .jump {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--fg-muted);
+  }
+  .pager .jump input {
+    width: 56px; padding: 4px 6px; font: inherit; font-size: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--fg); border-radius: var(--radius-sm);
+    text-align: center; outline: none;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+  }
+  .pager .jump input::-webkit-outer-spin-button,
+  .pager .jump input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .pager .jump input:focus { border-color: var(--accent); }
+
+  /* ----- spinner ----- */
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--fg-muted); flex: 1; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2.5px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ----- error ----- */
+  .err-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--danger);
+    border-radius: var(--radius); padding: 12px 14px;
+    margin: 8px 0;
+  }
+  .err-box .title { color: var(--danger); font-weight: 600; margin-bottom: 6px; }
+  .err-box pre {
+    margin: 0; font: 12px/1.5 ui-monospace, "SF Mono", Consolas, monospace;
+    color: var(--fg-muted); white-space: pre-wrap; word-break: break-all;
+  }
+  .err-box .copy {
+    margin-top: 8px; padding: 3px 10px; font-size: 11px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--fg); cursor: pointer;
+  }
+
+  /* ----- settings drawer ----- */
+  .drawer-mask { position: fixed; inset: 0; background: rgba(0,0,0,.25); z-index: 50; display: none; }
+  .drawer-mask.open { display: block; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 320px; background: var(--bg);
+    border-left: 1px solid var(--border);
+    z-index: 51; transform: translateX(100%);
+    transition: transform .2s ease;
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer header { border-bottom: 1px solid var(--border); padding: 14px 18px; }
+  .drawer .body { padding: 16px 18px; overflow-y: auto; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; font-weight: 500; }
+  .field .control { display: flex; gap: 6px; }
+  .seg-btn {
+    flex: 1; padding: 6px 8px; font-size: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--fg); border-radius: var(--radius-sm); cursor: pointer;
+    transition: all .12s;
+  }
+  .seg-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .field input[type=number] {
+    width: 100%; padding: 6px 10px; font: inherit; font-size: 13px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--fg); outline: none;
+  }
+  .field input[type=number]:focus { border-color: var(--accent); }
+  .field .range-row { display: flex; align-items: center; gap: 10px; }
+  .field input[type=range] { flex: 1; }
+  .field .val { font-variant-numeric: tabular-nums; color: var(--fg-muted); min-width: 36px; text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">DataView</span>
+  <span id="file" class="file"></span>
+  <span id="status" class="status"></span>
+  <button id="btn-sql" class="icon-btn" title="SQL (Ctrl+/)">&lt;/&gt;</button>
+  <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
+</header>
+
+<div id="sqlBar" class="sql-bar">
+  <div class="sql-bar-inner">
+    <textarea id="sqlInput" spellcheck="false" placeholder="SELECT * FROM dv WHERE ..."></textarea>
+    <button id="btn-run" class="run">运行</button>
+    <div class="hint">当前数据源叫 <code>dv</code>，在 SQL 中引用它即可。运行后下方表格会替换为查询结果。</div>
+  </div>
+</div>
+
+<main id="main">
+  <div class="center"><div class="spinner"></div><div>等待文件…从超级面板触发数据文件预览</div></div>
+</main>
+
+<div id="drawerMask" class="drawer-mask"></div>
+<aside id="drawer" class="drawer">
+  <header><strong>设置</strong></header>
+  <div class="body">
+    <div class="field">
+      <label>主题</label>
+      <div class="control" id="themeCtl">
+        <button class="seg-btn" data-v="light">浅色</button>
+        <button class="seg-btn" data-v="dark">深色</button>
+        <button class="seg-btn" data-v="system">跟随系统</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>每页行数</label>
+      <input type="number" id="pageSizeInput" min="20" max="5000" step="10" />
+    </div>
+    <div class="field">
+      <label>表格字号</label>
+      <div class="range-row">
+        <input type="range" id="fontInput" min="10" max="18" step="1" />
+        <span class="val" id="fontVal">13px</span>
+      </div>
+    </div>
+    <div class="field" style="color: var(--fg-subtle); font-size: 11px; margin-top: 24px;">
+      设置自动保存到 utools.dbStorage。
+    </div>
+  </div>
+</aside>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ---------- settings ----------
+const DEFAULTS = { theme: 'system', pageSize: 200, fontSize: 13 };
+let settings = Object.assign({}, DEFAULTS, (window.dv && window.dv.getSettings()) || {});
+function saveSettings() { window.dv && window.dv.setSettings(settings); }
+
+function applyTheme() {
+  const t = settings.theme;
+  const dark = t === 'dark' || (t === 'system' && (window.utools?.isDarkColors?.() ?? matchMedia('(prefers-color-scheme: dark)').matches));
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+}
+function applyFont() {
+  document.documentElement.style.setProperty('--table-fs', settings.fontSize + 'px');
+  $('fontVal').textContent = settings.fontSize + 'px';
+}
+function applySettings() {
+  applyTheme();
+  applyFont();
+  $('pageSizeInput').value = settings.pageSize;
+  $('fontInput').value = settings.fontSize;
+  document.querySelectorAll('#themeCtl .seg-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.v === settings.theme));
+}
+
+// ---------- helpers ----------
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  if (typeof s === 'object') { try { return JSON.stringify(s); } catch { return String(s); } }
+  return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+function spinner(text = '加载中…') {
+  return `<div class="center"><div class="spinner"></div><div>${esc(text)}</div></div>`;
+}
+
+function errorBox(msg) {
+  const cmd = (msg.match(/extension "(\w+)"/) || [])[1];
+  let extra = '';
+  if (cmd) {
+    const community = ['read_stat'].includes(cmd);
+    const stmt = community ? `INSTALL ${cmd} FROM community; LOAD ${cmd};` : `INSTALL ${cmd}; LOAD ${cmd};`;
+    extra = `<button class="copy" data-c="${esc(stmt)}">复制手动安装命令</button>`;
+  }
+  return `<div class="err-box">
+    <div class="title">出错了</div>
+    <pre>${esc(msg)}</pre>
+    ${extra}
+  </div>`;
+}
+
+// ---------- header status ----------
+function setStatus() {
+  const st = window.dv.status();
+  if (!st.loaded) { $('status').innerHTML = '<span class="err">duckdb 未加载</span>'; return false; }
+  const exts = Object.entries(st.extensions || {})
+    .map(([n, s]) => `${n}${s === 'ready' ? '✓' : '✗'}`).join(' ');
+  $('status').innerHTML = `<span class="ok">duckdb ${esc(st.version || '?')}</span>${exts ? ' · ' + esc(exts) : ''}`;
+  return true;
+}
+
+// ---------- table render ----------
+function renderTable(rows, columns) {
+  if (!rows || !rows.length) return '<div class="center" style="padding:30px"><div>(no rows)</div></div>';
+  const cols = columns && columns.length ? columns.map(c => ({ name: c.column_name || c.name, type: c.column_type || c.type })) : Object.keys(rows[0]).map(n => ({ name: n, type: '' }));
+  const head = '<tr>' + cols.map(c =>
+    `<th>${esc(c.name)}${c.type ? `<span class="col-type">${esc(c.type)}</span>` : ''}</th>`
+  ).join('') + '</tr>';
+  const body = rows.map(r => '<tr>' + cols.map(c => {
+    const v = r[c.name];
+    if (v === null || v === undefined) return '<td class="null">NULL</td>';
+    const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return `<td title="${esc(s)}">${esc(s)}</td>`;
+  }).join('') + '</tr>').join('');
+  return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+
+// ---------- viewer state ----------
+const state = {
+  filePath: null,
+  total: null,           // null = unknown
+  columns: [],
+  offset: 0,
+  rows: [],
+  tablesInfo: null,      // for .duckdb files
+  activeTableIdx: 0,
+};
+
+async function loadPage(offset) {
+  $('main').innerHTML = spinner('加载第 ' + (Math.floor(offset / settings.pageSize) + 1) + ' 页…');
+  try {
+    const rows = await window.dv.page(offset, settings.pageSize);
+    state.offset = offset;
+    state.rows = rows;
+    renderViewer();
+  } catch (e) {
+    $('main').innerHTML = errorBox(String(e.message || e));
+    bindCopy();
+  }
+}
+
+function renderViewer() {
+  const total = state.total;
+  const start = state.offset + 1;
+  const end = state.offset + state.rows.length;
+  const pageNo = Math.floor(state.offset / settings.pageSize) + 1;
+  const pageTotal = total != null ? Math.max(1, Math.ceil(total / settings.pageSize)) : null;
+  const hasNext = total != null ? end < total : state.rows.length === settings.pageSize;
+  const hasPrev = state.offset > 0;
+
+  let tabs = '';
+  if (state.tablesInfo) {
+    const ts = state.tablesInfo.tables;
+    tabs = '<div class="toolbar">' + ts.map((t, i) =>
+      `<button class="tab-btn ${i === state.activeTableIdx ? 'active' : ''}" data-i="${i}">${esc(t.table_schema)}.${esc(t.table_name)}</button>`
+    ).join('') + '</div>';
+  }
+
+  const jump = `<span class="jump">第 <input id="pageJump" type="number" min="1" ${pageTotal ? `max="${pageTotal}"` : ''} value="${pageNo}" /> ${pageTotal ? ` / ${pageTotal}` : ''} 页</span>`;
+
+  $('main').innerHTML =
+    tabs +
+    renderTable(state.rows, state.columns) +
+    `<div class="pager">
+      <span class="info">${state.rows.length ? `${start}-${end}` : '0'}${total != null ? ` / ${total}` : ''} 行</span>
+      <button id="btnPrev" ${hasPrev ? '' : 'disabled'}>← 上一页</button>
+      ${jump}
+      <button id="btnNext" ${hasNext ? '' : 'disabled'}>下一页 →</button>
+    </div>`;
+
+  if (hasPrev) $('btnPrev').onclick = () => loadPage(Math.max(0, state.offset - settings.pageSize));
+  if (hasNext) $('btnNext').onclick = () => loadPage(state.offset + settings.pageSize);
+
+  const jumpEl = $('pageJump');
+  const doJump = () => {
+    let v = parseInt(jumpEl.value, 10);
+    if (!Number.isFinite(v) || v < 1) v = 1;
+    if (pageTotal && v > pageTotal) v = pageTotal;
+    jumpEl.value = v;
+    const newOffset = (v - 1) * settings.pageSize;
+    if (newOffset !== state.offset) loadPage(newOffset);
+  };
+  jumpEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); doJump(); }
+  });
+  jumpEl.addEventListener('blur', doJump);
+  if (state.tablesInfo) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.onclick = () => switchTable(+b.dataset.i);
+    });
+  }
+}
+
+async function switchTable(i) {
+  state.activeTableIdx = i;
+  const t = state.tablesInfo.tables[i];
+  $('main').innerHTML = spinner(`加载 ${t.table_schema}.${t.table_name}…`);
+  try {
+    const meta = await window.dv.openTable(state.filePath, t.table_schema, t.table_name);
+    state.total = meta.total;
+    state.columns = meta.columns;
+    state.offset = 0;
+    const rows = await window.dv.page(0, settings.pageSize);
+    state.rows = rows;
+    renderViewer();
+  } catch (e) {
+    $('main').innerHTML = errorBox(String(e.message || e));
+    bindCopy();
+  }
+}
+
+async function openFile(filePath) {
+  state.filePath = filePath;
+  state.tablesInfo = null;
+  state.activeTableIdx = 0;
+  $('file').textContent = filePath;
+  $('main').innerHTML = spinner('打开文件…');
+  try {
+    const info = await window.dv.open(filePath);
+    if (info.kind === 'tables') {
+      state.tablesInfo = info;
+      if (info.tables.length === 0) {
+        $('main').innerHTML = '<div class="meta">数据库中无可用表。</div>';
+        return;
+      }
+      await switchTable(0);
+      return;
+    }
+    state.total = info.total;
+    state.columns = info.columns;
+    state.offset = 0;
+    const rows = await window.dv.page(0, settings.pageSize);
+    state.rows = rows;
+    renderViewer();
+  } catch (e) {
+    $('main').innerHTML = errorBox(String(e.message || e));
+    bindCopy();
+  }
+  setStatus();
+}
+
+async function runSQL() {
+  const sql = $('sqlInput').value.trim();
+  if (!sql) return;
+  $('main').innerHTML = spinner('执行查询…');
+  try {
+    const meta = await window.dv.query(sql);
+    state.total = meta.total;
+    state.columns = meta.columns;
+    state.offset = 0;
+    state.tablesInfo = null;
+    state.rows = await window.dv.page(0, settings.pageSize);
+    renderViewer();
+  } catch (e) {
+    $('main').innerHTML = errorBox(String(e.message || e));
+    bindCopy();
+  }
+}
+
+function bindCopy() {
+  document.querySelectorAll('.err-box .copy').forEach(b => {
+    b.onclick = () => navigator.clipboard.writeText(b.dataset.c);
+  });
+}
+
+// ---------- sql bar toggle ----------
+$('btn-sql').onclick = () => {
+  const open = $('sqlBar').classList.toggle('open');
+  $('btn-sql').classList.toggle('active', open);
+  if (open) setTimeout(() => $('sqlInput').focus(), 200);
+};
+$('btn-run').onclick = runSQL;
+$('sqlInput').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runSQL(); }
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); $('btn-sql').click(); }
+});
+
+// ---------- settings drawer ----------
+function openDrawer(open) {
+  $('drawer').classList.toggle('open', open);
+  $('drawerMask').classList.toggle('open', open);
+}
+$('btn-settings').onclick = () => openDrawer(true);
+$('drawerMask').onclick = () => openDrawer(false);
+
+document.querySelectorAll('#themeCtl .seg-btn').forEach(b => {
+  b.onclick = () => { settings.theme = b.dataset.v; saveSettings(); applySettings(); };
+});
+$('pageSizeInput').addEventListener('change', e => {
+  let v = parseInt(e.target.value, 10);
+  if (!Number.isFinite(v) || v < 20) v = 20;
+  if (v > 5000) v = 5000;
+  settings.pageSize = v; e.target.value = v; saveSettings();
+  if (state.filePath && state.rows.length) loadPage(0);
+});
+$('fontInput').addEventListener('input', e => {
+  settings.fontSize = parseInt(e.target.value, 10);
+  applyFont(); saveSettings();
+});
+
+// follow system theme changes
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (settings.theme === 'system') applyTheme();
+});
+
+// ---------- boot ----------
+applySettings();
+setStatus();
+
+if (window.utools) {
+  window.utools.onPluginEnter(({ type, payload }) => {
+    setStatus();
+    if (type === 'files' && payload && payload[0] && payload[0].path) {
+      openFile(payload[0].path);
+    }
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "dataview",
+  "version": "1.0.1",
+  "description": "uTools DuckDB data preview plugin",
+  "main": "preload.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test-duckdb.js"
+  },
+  "dependencies": {
+    "duckdb": "^1.4.4"
+  }
+}
