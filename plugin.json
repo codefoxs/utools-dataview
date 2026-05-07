@@ -2,7 +2,7 @@
   "pluginName": "DataView",
   "description": "P0 feasibility test - DuckDB in uTools Electron",
   "author": "p0",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "index.html",
   "preload": "preload.js",
   "logo": "logo.png",

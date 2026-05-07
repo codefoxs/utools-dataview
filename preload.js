@@ -90,6 +90,24 @@ async function ensureAttached(filePath) {
   return alias;
 }
 
+// columns whose JS-side representation is awkward; cast to VARCHAR in DuckDB so
+// it formats them naturally (DATE -> "2020-11-19", TIMESTAMP -> "2020-11-19 00:00:00", etc.)
+const STRINGIFY_RE = /^(DATE|TIME|TIMESTAMP|INTERVAL|BLOB|UUID|HUGEINT|UHUGEINT|UBIGINT|BIGINT|DECIMAL)/i;
+
+let viewSelect = 'SELECT *';
+
+function buildViewSelect(columns) {
+  const reps = [];
+  for (const c of columns || []) {
+    const t = String(c.column_type || c.type || '').toUpperCase();
+    if (STRINGIFY_RE.test(t)) {
+      const q = `"${String(c.column_name || c.name).replace(/"/g, '""')}"`;
+      reps.push(`${q}::VARCHAR AS ${q}`);
+    }
+  }
+  return reps.length ? `SELECT * REPLACE (${reps.join(', ')})` : 'SELECT *';
+}
+
 async function setSource(selectExpr) {
   await run(`CREATE OR REPLACE TEMP VIEW dv AS SELECT * FROM ${selectExpr}`);
   await run(`CREATE OR REPLACE TEMP VIEW dv_view AS SELECT * FROM dv`);
@@ -97,6 +115,7 @@ async function setSource(selectExpr) {
     run('SELECT COUNT(*) AS n FROM dv_view').then(r => r[0].n).catch(() => null),
     run('DESCRIBE dv_view').catch(() => []),
   ]);
+  viewSelect = buildViewSelect(cols);
   return { total: cnt, columns: cols };
 }
 
@@ -128,7 +147,7 @@ window.dv = {
   },
 
   page: async (offset, limit) => {
-    return run(`SELECT * FROM dv_view LIMIT ${limit | 0} OFFSET ${offset | 0}`);
+    return run(`${viewSelect} FROM dv_view LIMIT ${limit | 0} OFFSET ${offset | 0}`);
   },
 
   query: async (sql) => {
@@ -138,6 +157,7 @@ window.dv = {
       run('SELECT COUNT(*) AS n FROM dv_view').then(r => r[0].n).catch(() => null),
       run('DESCRIBE dv_view').catch(() => []),
     ]);
+    viewSelect = buildViewSelect(cols);
     return { total: cnt, columns: cols };
   },
 
