@@ -8,13 +8,8 @@
   "logo": "logo.png",
   "features": [
     {
-      "code": "dataview-test",
-      "explain": "P0 test",
-      "cmds": ["dataview-test"]
-    },
-    {
       "code": "dataview-open",
-      "explain": "Preview data file",
+      "explain": "预览数据文件",
       "cmds": [
         {
           "type": "files",
