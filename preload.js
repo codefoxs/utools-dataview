@@ -163,6 +163,49 @@ window.dv = {
 
   rawQuery: async (sql) => run(sql),
 
+  convertFormats: () => ([
+    { id: 'csv',     ext: 'csv',     label: 'CSV',     desc: '逗号分隔，UTF-8',                   deps: [] },
+    { id: 'tsv',     ext: 'tsv',     label: 'TSV',     desc: '制表符分隔',                          deps: [] },
+    { id: 'parquet', ext: 'parquet', label: 'Parquet', desc: '列式压缩，分析友好',                  deps: [] },
+    { id: 'json',    ext: 'json',    label: 'JSON',    desc: '数组形式',                            deps: [] },
+    { id: 'xlsx',    ext: 'xlsx',    label: 'Excel',   desc: 'xlsx，单 sheet',                      deps: [{ name: 'excel' }] },
+    { id: 'duckdb',  ext: 'duckdb',  label: 'DuckDB',  desc: '导出到新的 .duckdb 文件',             deps: [] },
+  ]),
+
+  showSaveDialog: (opts) => {
+    try { return window.utools.showSaveDialog(opts); }
+    catch (e) { return null; }
+  },
+
+  convert: async (targetPath, formatId) => {
+    const fmts = window.dv.convertFormats();
+    const fmt = fmts.find(f => f.id === formatId);
+    if (!fmt) throw new Error('unknown format: ' + formatId);
+    await ensureDeps(fmt.deps);
+    const out = esc(targetPath);
+    if (formatId === 'duckdb') {
+      const alias = `_out_${++attachCounter}`;
+      try {
+        await run(`ATTACH '${out}' AS ${alias}`);
+        await run(`CREATE TABLE ${alias}.main."data" AS SELECT * FROM dv`);
+      } finally {
+        try { await run(`DETACH ${alias}`); } catch {}
+      }
+      return { path: targetPath };
+    }
+    let copyOpts;
+    switch (formatId) {
+      case 'csv':     copyOpts = `FORMAT CSV, HEADER`; break;
+      case 'tsv':     copyOpts = `FORMAT CSV, HEADER, DELIMITER '\\t'`; break;
+      case 'parquet': copyOpts = `FORMAT PARQUET`; break;
+      case 'json':    copyOpts = `FORMAT JSON, ARRAY true`; break;
+      case 'xlsx':   copyOpts = `FORMAT XLSX, HEADER true`; break;
+      default: throw new Error('unsupported format: ' + formatId);
+    }
+    await run(`COPY (SELECT * FROM dv) TO '${out}' (${copyOpts})`);
+    return { path: targetPath };
+  },
+
   getSettings: () => {
     try { return window.utools.dbStorage.getItem('dataview.settings') || null; }
     catch { return null; }

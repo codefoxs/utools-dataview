@@ -254,6 +254,61 @@
   .field .range-row { display: flex; align-items: center; gap: 10px; }
   .field input[type=range] { flex: 1; }
   .field .val { font-variant-numeric: tabular-nums; color: var(--fg-muted); min-width: 36px; text-align: right; }
+
+  /* ----- convert modal ----- */
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 60; display: none; align-items: center; justify-content: center; }
+  .modal-mask.open { display: flex; }
+  .modal {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); width: 560px; max-width: calc(100vw - 40px);
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .modal .m-head {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .modal .m-head strong { font-size: 14px; }
+  .modal .m-head .src {
+    font-size: 11.5px; color: var(--fg-muted);
+    background: var(--surface-2); padding: 2px 8px; border-radius: 10px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .modal .m-head .close {
+    margin-left: auto; background: transparent; border: none;
+    font-size: 18px; color: var(--fg-muted); cursor: pointer; line-height: 1;
+  }
+  .modal .m-head .close:hover { color: var(--fg); }
+  .modal .m-body { padding: 14px 18px 18px; }
+  .modal .m-hint { font-size: 12px; color: var(--fg-muted); margin: 0 0 12px; }
+  .fmt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .fmt-card {
+    text-align: left; padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); cursor: pointer;
+    transition: all .12s; color: var(--fg);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .fmt-card:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+  .fmt-card:disabled { opacity: .4; cursor: not-allowed; }
+  .fmt-card .l { font-weight: 600; font-size: 13px; }
+  .fmt-card .d { font-size: 11px; color: var(--fg-subtle); }
+  .fmt-card.same .l::after { content: ' (源)'; color: var(--fg-subtle); font-weight: 400; font-size: 11px; }
+
+  /* ----- toast ----- */
+  .toast-stack {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 100; display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+  }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--ok);
+    color: var(--fg); padding: 8px 14px;
+    border-radius: var(--radius-sm); font-size: 12.5px;
+    box-shadow: var(--shadow); pointer-events: auto;
+    max-width: 480px; word-break: break-all;
+  }
+  .toast.err { border-left-color: var(--danger); }
 </style>
 </head>
 <body>
@@ -263,6 +318,7 @@
   <span id="file" class="file"></span>
   <span id="status" class="status"></span>
   <button id="btn-sql" class="icon-btn" title="SQL (Ctrl+/)">&lt;/&gt;</button>
+  <button id="btn-convert" class="icon-btn" title="转换格式" disabled>⇄</button>
   <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
 </header>
 
@@ -277,6 +333,22 @@
 <main id="main">
   <div class="center"><div class="spinner"></div><div>等待文件…从超级面板触发数据文件预览</div></div>
 </main>
+
+<div id="convertMask" class="modal-mask">
+  <div class="modal" role="dialog" aria-label="转换格式">
+    <div class="m-head">
+      <strong>转换为</strong>
+      <span class="src" id="convertSrc"></span>
+      <button class="close" id="convertClose" title="关闭">×</button>
+    </div>
+    <div class="m-body">
+      <p class="m-hint">选择目标格式，随后选择保存位置。导出的是当前数据视图 <code>dv</code>（含可能的列类型转换）。</p>
+      <div class="fmt-grid" id="fmtGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toastStack" class="toast-stack"></div>
 
 <div id="drawerMask" class="drawer-mask"></div>
 <aside id="drawer" class="drawer">
@@ -459,6 +531,7 @@ function renderViewer() {
       b.onclick = () => switchTable(+b.dataset.i);
     });
   }
+  refreshConvertBtn();
 }
 
 async function switchTable(i) {
@@ -533,6 +606,76 @@ function bindCopy() {
   });
 }
 
+// ---------- toast ----------
+function toast(msg, kind = 'ok', ms = 3200) {
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'err' ? ' err' : '');
+  el.textContent = msg;
+  $('toastStack').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, ms);
+}
+
+// ---------- convert modal ----------
+function currentSourceExt() {
+  if (!state.filePath) return '';
+  const m = /\.([^.\\/]+)$/.exec(state.filePath);
+  return m ? m[1].toLowerCase() : '';
+}
+function refreshConvertBtn() {
+  const ready = !!state.filePath && (state.tablesInfo ? state.rows.length >= 0 && state.activeTableIdx != null : true);
+  $('btn-convert').disabled = !ready || state.tablesInfo && state.rows.length === 0;
+}
+function openConvertModal() {
+  if ($('btn-convert').disabled) return;
+  const srcExt = currentSourceExt();
+  $('convertSrc').textContent = srcExt ? '.' + srcExt : '';
+  const fmts = window.dv.convertFormats();
+  $('fmtGrid').innerHTML = fmts.map(f => {
+    const same = f.ext === srcExt;
+    return `<button class="fmt-card ${same ? 'same' : ''}" data-id="${f.id}" data-ext="${f.ext}" ${same ? 'disabled' : ''}>
+      <span class="l">${esc(f.label)}</span>
+      <span class="d">.${f.ext} · ${esc(f.desc)}</span>
+    </button>`;
+  }).join('');
+  $('fmtGrid').querySelectorAll('.fmt-card').forEach(b => {
+    b.onclick = () => doConvert(b.dataset.id, b.dataset.ext);
+  });
+  $('convertMask').classList.add('open');
+}
+function closeConvertModal() { $('convertMask').classList.remove('open'); }
+
+async function doConvert(formatId, ext) {
+  const src = state.filePath || '';
+  const baseName = (src.split(/[\\/]/).pop() || 'data').replace(/\.[^.]+$/, '') || 'data';
+  let defaultPath = baseName + '.' + ext;
+  try {
+    const parent = src.replace(/[\\/][^\\/]+$/, '');
+    if (parent && parent !== src) defaultPath = parent + (src.includes('\\') ? '\\' : '/') + baseName + '.' + ext;
+  } catch {}
+  const target = window.dv.showSaveDialog({
+    title: '保存转换结果',
+    defaultPath,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (!target) return;
+  closeConvertModal();
+  toast('正在转换…', 'ok', 1500);
+  try {
+    await window.dv.convert(target, formatId);
+    toast('已保存：' + target, 'ok', 4000);
+    setStatus();
+  } catch (e) {
+    toast('转换失败：' + String(e.message || e), 'err', 6000);
+  }
+}
+
+$('btn-convert').onclick = openConvertModal;
+$('convertClose').onclick = closeConvertModal;
+$('convertMask').addEventListener('click', e => { if (e.target === $('convertMask')) closeConvertModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('convertMask').classList.contains('open')) closeConvertModal();
+});
+
 // ---------- sql bar toggle ----------
 $('btn-sql').onclick = () => {
   const open = $('sqlBar').classList.toggle('open');
@@ -579,11 +722,17 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 applySettings();
 setStatus();
 
+let pendingConvertOpen = false;
 if (window.utools) {
-  window.utools.onPluginEnter(({ type, payload }) => {
+  window.utools.onPluginEnter(async ({ code, type, payload }) => {
     setStatus();
+    pendingConvertOpen = (code === 'dataview-convert');
     if (type === 'files' && payload && payload[0] && payload[0].path) {
-      openFile(payload[0].path);
+      await openFile(payload[0].path);
+      if (pendingConvertOpen && !$('btn-convert').disabled) {
+        openConvertModal();
+      }
+      pendingConvertOpen = false;
     }
   });
 }

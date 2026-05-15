@@ -2,7 +2,7 @@
   "pluginName": "DataView",
   "description": "通过超级面板快速预览 csv/tsv/parquet/xlsx/dta/sav/sas7bdat/por/xpt/duckdb 数据文件，基于 DuckDB",
   "author": "codefoxs",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "main": "index.html",
   "preload": "preload.js",
   "logo": "logo.png",
@@ -19,6 +19,18 @@
         {
           "type": "files",
           "label": "DataView 预览",
+          "fileType": "file",
+          "match": "/\\.(csv|tsv|xlsx?|parquet|duckdb|db|sas7bdat|dta|sav|por|xpt)$/i"
+        }
+      ]
+    },
+    {
+      "code": "dataview-convert",
+      "explain": "转换数据文件格式",
+      "cmds": [
+        {
+          "type": "files",
+          "label": "DataView 转换",
           "fileType": "file",
           "match": "/\\.(csv|tsv|xlsx?|parquet|duckdb|db|sas7bdat|dta|sav|por|xpt)$/i"
         }
